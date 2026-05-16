@@ -4,6 +4,7 @@ local state = require("tree-sitter-manager.config")
 local util = require("tree-sitter-manager.util")
 local installer = require("tree-sitter-manager.installer")
 local ui = require("tree-sitter-manager.ui")
+
 -- Preserve public API surface for backward compatibility
 M._install_single = installer._install_single
 M.open = ui.open
@@ -52,39 +53,31 @@ function M.setup(opts)
     end, { nargs = 0, desc = "Open Tree-sitter Parsers Manager" })
 
     vim.api.nvim_create_user_command("TSInstall", function(args)
-        local languages = args.fargs
-        if #languages == 0 then
-            return
-        end
-        for _, lang in ipairs(languages) do
-            installer.install_new(lang)
+        for _, lang in ipairs(args.fargs) do
+            installer.install_new(lang, true)
         end
     end, {
-        nargs = '+',
-        bang = true,
+        nargs = "+",
         bar = true,
         complete = function(_argLead, _cmdLine, _cursorPos)
             return state.languages
         end,
-        desc = 'Install treesitter parsers',
+        desc = "Install treesitter parsers",
     })
+
     vim.api.nvim_create_user_command("TSUninstall", function(args)
-        local languages = args.fargs
-        if #languages == 0 then
-            return
-        end
-        for _, lang in ipairs(languages) do
+        for _, lang in ipairs(args.fargs) do
             installer.remove(lang)
         end
     end, {
-        nargs = '+',
-        bang = true,
+        nargs = "+",
         bar = true,
         complete = function(_argLead, _cmdLine, _cursorPos)
             return state.languages
         end,
-        desc = 'Remove treesitter parsers',
+        desc = "Remove treesitter parsers",
     })
+
     if state.cfg.highlight then
         local highlight_ft = {}
         for _, lang in ipairs(state.languages) do
