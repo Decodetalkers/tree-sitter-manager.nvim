@@ -52,6 +52,32 @@ function M.setup(opts)
         M.open()
     end, { nargs = 0, desc = "Open Tree-sitter Parsers Manager" })
 
+    vim.api.nvim_create_user_command("TSInstall", function(args)
+        for _, lang in ipairs(args.fargs) do
+            installer.install_new(lang, true)
+        end
+    end, {
+        nargs = "+",
+        bar = true,
+        complete = function(_argLead, _cmdLine, _cursorPos)
+            return state.languages
+        end,
+        desc = "Install treesitter parsers",
+    })
+
+    vim.api.nvim_create_user_command("TSUninstall", function(args)
+        for _, lang in ipairs(args.fargs) do
+            installer.remove(lang)
+        end
+    end, {
+        nargs = "+",
+        bar = true,
+        complete = function(_argLead, _cmdLine, _cursorPos)
+            return state.languages
+        end,
+        desc = "Remove treesitter parsers",
+    })
+
     if state.cfg.highlight then
         local highlight_ft = {}
         for _, lang in ipairs(state.languages) do

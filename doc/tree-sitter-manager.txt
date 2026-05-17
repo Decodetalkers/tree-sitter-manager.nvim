@@ -177,6 +177,17 @@ nohighlight ~
 :TSManager
   Open the Tree-sitter parser management TUI.
 
+                                                                 *:TSInstall*
+:TSInstall {lang} ...
+  Install parsers provided as arguments. >vim
+    :TSInstall vim nix
+<
+                                                                 *:TSUninstall*
+:TSUninstall {lang} ...
+  Uninstall parsers provided as arguments. >vim
+    :TSUninstall vim nix
+<
+
 ==============================================================================
 7. KEYBINDINGS                             *tree-sitter-manager-keybindings*
 
