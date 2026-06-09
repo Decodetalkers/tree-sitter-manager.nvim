@@ -105,6 +105,20 @@ function M.setup(opts)
         end,
         desc = "Remove treesitter parsers",
     })
+
+    vim.api.nvim_create_user_command("TSUpdate", function(args)
+        for _, lang in ipairs(args.fargs) do
+            installer.remove(lang)
+            installer.install_new(lang)
+        end
+    end, {
+        nargs = "+",
+        bar = true,
+        complete = function(_argLead, _cmdLine, _cursorPos)
+            return state.languages
+        end,
+        desc = "Update treesitter parsers",
+    })
 end
 
 return M
