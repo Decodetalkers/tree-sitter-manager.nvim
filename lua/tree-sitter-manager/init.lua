@@ -88,7 +88,9 @@ function M.setup(opts)
         nargs = "+",
         bar = true,
         complete = function(_argLead, _cmdLine, _cursorPos)
-            return state.languages
+            return vim.iter(state.languages).filter(function(lang)
+                return vim.startswith(lang, _argLead) and not util.is_installed(lang)
+            end)
         end,
         desc = "Install treesitter parsers",
     })
@@ -101,7 +103,9 @@ function M.setup(opts)
         nargs = "+",
         bar = true,
         complete = function(_argLead, _cmdLine, _cursorPos)
-            return state.languages
+            return vim.iter(state.languages).filter(function(lang)
+                return vim.startswith(lang, _argLead) and util.is_installed(lang)
+            end)
         end,
         desc = "Remove treesitter parsers",
     })
@@ -115,7 +119,9 @@ function M.setup(opts)
         nargs = "+",
         bar = true,
         complete = function(_argLead, _cmdLine, _cursorPos)
-            return state.languages
+            return vim.iter(state.languages).filter(function(lang)
+                return vim.startswith(lang, _argLead)
+            end)
         end,
         desc = "Update treesitter parsers",
     })
