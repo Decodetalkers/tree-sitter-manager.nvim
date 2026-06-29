@@ -1,15 +1,19 @@
 name: Auto parse update
 
 on:
-  schedule:
-    - cron: '30 0 * * MON'
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   createPullRequest:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      id-token: write
       issues: write
+      pull-requests: write
     steps:
 
       - uses: actions/checkout@v6
@@ -46,5 +50,4 @@ jobs:
             auto update
           assignees: Decodetalkers
           reviewers: Decodetalkers
-          milestone: 1
           draft: false
