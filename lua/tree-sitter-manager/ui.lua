@@ -6,10 +6,13 @@ local ns = vim.api.nvim_create_namespace("tree-sitter-manager.spinner")
 
 local title_asci = " Tree-sitter Parser Manager "
 local title_nerd = " 🌳 Tree-sitter Parser Manager "
+
+---@type string
 local title
 
-local status_asci = { "OK", "!!", "..", "  " }
-local status_nerd = { "✅", "⚠️", "❌", "  " }
+local status_asci = { "OK", "!!", "..", "  ", "UP" }
+local status_nerd = { "✅", "⚠️", "❌", "  ", "⏫" }
+
 ---@type fun(id:integer) -> string
 local get_status_icon
 local icon_col
@@ -17,17 +20,20 @@ local icon_col
 local footer = " [i] Install  [x] Remove  [u] Update  [r] Refresh  [f] Filter  [q] Close "
 
 local filter_type = {
-    --            ok    warn  miss  installing
-    util.getter({ true, true, true, true }), --    all
-    util.getter({ true, true, false, true }), --   installed
-    util.getter({ false, true, false, true }), --  warning
-    util.getter({ false, false, true, false }), -- missing
+    --            ok    warn  miss  installing   outdate
+    util.getter({ true, true, true, true, false }), --    all
+    util.getter({ true, true, false, true, false }), --   installed
+    util.getter({ false, true, false, true, false }), --  warning
+    util.getter({ false, false, true, false, false }), -- missing
+    util.getter({ false, false, false, false, true }), -- outdate
 }
 ---@type integer
-local filter_idx
+local filter_idx = 1
 
 local frames = { "⣾ ", "⣽ ", "⣻ ", "⢿ ", "⡿ ", "⣟ ", "⣯ ", "⣷ " }
-local frame_idx
+
+---@type integer
+local frame_idx = 1
 
 ---@class UiStatus
 ---@field buf integer|nil
@@ -36,14 +42,16 @@ local frame_idx
 ---@field formatter string
 ---@field spinner uv.uv_timer_t|nil
 ---@field content_width integer
-local UiStatus =  {
+---@field to_update_idx string[]
+local UiStatus = {
     buf = nil,
     win = nil,
     langs = {},
     formatter = "",
     spinner = nil,
-    content_width = 0
-};
+    content_width = 0,
+    to_update_idx = {},
+}
 
 local M = {}
 
@@ -56,6 +64,7 @@ function M.setup()
 end
 
 ---@param lang string
+---@return integer
 local function get_status(lang)
     if installer.installing[lang] then
         return 4 -- installing
@@ -65,11 +74,15 @@ local function get_status(lang)
         return 1 -- ok
     elseif vim.iter(util.get_requires(lang)):all(util.is_installed) then
         return 1 -- ok
+    elseif util.is_outdated(lang) then
+        return 5
     else
         return 2 -- warning
     end
 end
 
+---@param lang string
+---@return string
 local function get_meta_suffix(lang)
     local info = util.get_repo_info(lang)
     local parts = {}
@@ -105,12 +118,15 @@ local function cycle_filter()
     M.render()
 end
 
-local function render_spinner()
+local function render_hl_part()
     if not UiStatus.buf or not vim.api.nvim_buf_is_valid(UiStatus.buf) then
         return
     end
 
     vim.api.nvim_buf_clear_namespace(UiStatus.buf, ns, 0, -1)
+    for _, index in ipairs(UiStatus.to_update_idx) do
+        vim.hl.range(UiStatus.buf, ns, "Special", { index - 1, icon_col }, { index - 1, icon_col + 1 })
+    end
     for row, lang in ipairs(UiStatus.langs) do
         if installer.installing[lang] then
             vim.api.nvim_buf_set_extmark(UiStatus.buf, ns, row - 1, icon_col, {
@@ -141,18 +157,23 @@ function M.render(out)
         table.sort(vim.list.unique(vim.list_extend(UiStatus.langs, get_langs_filtered())))
     end
 
-    local status = vim.iter(UiStatus.langs):map(get_status):map(get_status_icon)
-    local meta = vim.iter(UiStatus.langs):map(get_meta_suffix)
     local lines = vim.iter(UiStatus.langs)
-        :map(function(lang)
-            return UiStatus.formatter:format(lang, status:next(), meta:next())
+        :enumerate()
+        :map(function(index, lang)
+            local status_code = get_status(lang)
+            if status_code == 5 then
+                table.insert(UiStatus.to_update_idx, index)
+            end
+            local status = get_status_icon(status_code)
+            local meta = get_meta_suffix(lang)
+            return UiStatus.formatter:format(lang, status, meta)
         end)
         :totable()
 
     vim.bo[UiStatus.buf].modifiable = true
     vim.api.nvim_buf_set_lines(UiStatus.buf, 0, -1, false, lines)
     vim.bo[UiStatus.buf].modifiable = false
-    render_spinner()
+    render_hl_part()
 
     UiStatus.content_width = vim.iter(lines):map(string.len):fold(0, math.max)
     return true
@@ -241,7 +262,7 @@ function M.open()
         80,
         vim.schedule_wrap(function()
             frame_idx = (frame_idx % #frames) + 1
-            render_spinner()
+            render_hl_part()
         end)
     )
 end
