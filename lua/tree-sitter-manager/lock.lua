@@ -5,7 +5,7 @@ local function lock_path()
     return vim.fn.stdpath("state") .. "/tsm-lock.json"
 end
 
---- @return table
+--- @return table<string, string>
 function M.lock_read()
     local path = lock_path()
     local fd = io.open(path, "r")
@@ -33,7 +33,7 @@ function M.lock_write(data)
     fd:close()
 end
 
---- @param data table
+--- @param data table<string, string> | string
 --- @param indent? string
 --- @return string
 function M.json_pretty(data, indent)

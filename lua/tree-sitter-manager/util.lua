@@ -1,5 +1,5 @@
-local src = debug.getinfo(1, "S").source
-local abs = src:sub(1, 1) == "@" and vim.fn.fnamemodify(src:sub(2), ":p") or ""
+local debug_src = debug.getinfo(1, "S").source
+local abs = debug_src:sub(1, 1) == "@" and vim.fn.fnamemodify(debug_src:sub(2), ":p") or ""
 
 local config = require("tree-sitter-manager.config")
 local invalid = require("tree-sitter-manager.invalid-filetypes")
@@ -84,7 +84,8 @@ function M.get_requires(lang)
     return deps
 end
 
----@return table | nil
+---@param lang string
+---@return tree_sitter_manager.InstallInfo | nil
 function M.get_repo_info(lang)
     local entry = config.effective_repos[lang]
     if not entry then
@@ -263,6 +264,13 @@ function M.run(args, opts)
     return job
 end
 
+---@class tree_sitter_manager.CopyResult
+---@field ok boolean
+---@field error? string
+
+---@param src string
+---@param dst string
+---@return Status
 function M.copy_dir(src, dst)
     local ok, err = pcall(vim.fn.mkdir, dst, "p")
 

@@ -10,6 +10,7 @@ local title
 
 local status_asci = { "OK", "!!", "..", "  " }
 local status_nerd = { "✅", "⚠️", "❌", "  " }
+---@type fun(id:integer) -> string
 local get_status_icon
 local icon_col
 
@@ -22,12 +23,27 @@ local filter_type = {
     util.getter({ false, true, false, true }), --  warning
     util.getter({ false, false, true, false }), -- missing
 }
+---@type integer
 local filter_idx
 
 local frames = { "⣾ ", "⣽ ", "⣻ ", "⢿ ", "⡿ ", "⣟ ", "⣯ ", "⣷ " }
 local frame_idx
 
-local buf, win, langs, formatter, spinner, content_width
+---@class UiStatus
+---@field buf integer|nil
+---@field win integer|nil
+---@field langs string[]
+---@field formatter string
+---@field spinner uv.uv_timer_t|nil
+---@field content_width integer
+local UiStatus =  {
+    buf = nil,
+    win = nil,
+    langs = {},
+    formatter = "",
+    spinner = nil,
+    content_width = 0
+};
 
 local M = {}
 
@@ -35,10 +51,11 @@ function M.setup()
     title = config.cfg.nerdfont and title_nerd or title_asci
     get_status_icon = util.getter(config.cfg.nerdfont and status_nerd or status_asci)
     local langwidth = vim.iter(config.languages):map(string.len):fold(0, math.max)
-    formatter = "   %-" .. langwidth .. "s  %s%s"
+    UiStatus.formatter = "   %-" .. langwidth .. "s  %s%s"
     icon_col = 3 + langwidth + 2
 end
 
+---@param lang string
 local function get_status(lang)
     if installer.installing[lang] then
         return 4 -- installing
@@ -80,23 +97,23 @@ local function cycle_filter()
     for idx = 1, 4 do
         filter_idx = (filter_idx % 4) + 1
         new_langs = get_langs_filtered()
-        if #new_langs > 0 and not vim.deep_equal(langs, new_langs) then
+        if #new_langs > 0 and not vim.deep_equal(UiStatus.langs, new_langs) then
             break
         end
     end
-    langs = new_langs
+    UiStatus.langs = new_langs
     M.render()
 end
 
 local function render_spinner()
-    if not buf or not vim.api.nvim_buf_is_valid(buf) then
+    if not UiStatus.buf or not vim.api.nvim_buf_is_valid(UiStatus.buf) then
         return
     end
 
-    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-    for row, lang in ipairs(langs) do
+    vim.api.nvim_buf_clear_namespace(UiStatus.buf, ns, 0, -1)
+    for row, lang in ipairs(UiStatus.langs) do
         if installer.installing[lang] then
-            vim.api.nvim_buf_set_extmark(buf, ns, row - 1, icon_col, {
+            vim.api.nvim_buf_set_extmark(UiStatus.buf, ns, row - 1, icon_col, {
                 virt_text = { { frames[frame_idx], "Special" } },
                 virt_text_pos = "overlay",
             })
@@ -106,6 +123,7 @@ end
 
 local act = vim.defaulttable(function(action)
     return function()
+        local r, c = unpack(vim.api.nvim_win_get_cursor(UiStatus.win))
         local lang = vim.api.nvim_get_current_line():match("^%s*([%w_]+)")
         if lang then
             installer[action](lang, M.render)
@@ -114,36 +132,43 @@ local act = vim.defaulttable(function(action)
     end
 end)
 
+---@param out? boolean | Status
+---@return boolean
 function M.render(out)
-    if not buf or not vim.api.nvim_buf_is_valid(buf) then
-        return 0
+    if not UiStatus.buf or not vim.api.nvim_buf_is_valid(UiStatus.buf) then
+        return false
     elseif out then -- update langs on callback
-        table.sort(vim.list.unique(vim.list_extend(langs, get_langs_filtered())))
+        table.sort(vim.list.unique(vim.list_extend(UiStatus.langs, get_langs_filtered())))
     end
 
-    local status = vim.iter(langs):map(get_status):map(get_status_icon)
-    local meta = vim.iter(langs):map(get_meta_suffix)
-    local lines = vim.iter(langs)
+    local status = vim.iter(UiStatus.langs):map(get_status):map(get_status_icon)
+    local meta = vim.iter(UiStatus.langs):map(get_meta_suffix)
+    local lines = vim.iter(UiStatus.langs)
         :map(function(lang)
-            return formatter:format(lang, status:next(), meta:next())
+            return UiStatus.formatter:format(lang, status:next(), meta:next())
         end)
         :totable()
 
-    vim.bo[buf].modifiable = true
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.bo[buf].modifiable = false
+    vim.bo[UiStatus.buf].modifiable = true
+    vim.api.nvim_buf_set_lines(UiStatus.buf, 0, -1, false, lines)
+    vim.bo[UiStatus.buf].modifiable = false
     render_spinner()
 
-    content_width = vim.iter(lines):map(string.len):fold(0, math.max)
+    UiStatus.content_width = vim.iter(lines):map(string.len):fold(0, math.max)
+    return true
 end
 
 local function close()
-    spinner:stop()
-    vim.api.nvim_win_close(win, true)
+    UiStatus.spinner:stop()
+    vim.api.nvim_win_close(UiStatus.win, true)
 end
 
+---@return number|nil
+---@return number|nil
+---@return number
+---@return number
 local function get_dims()
-    local w = math.max(config.cfg.min_width, #footer + 4, content_width + 3)
+    local w = math.max(config.cfg.min_width, #footer + 4, UiStatus.content_width + 3)
     local h = math.max(config.cfg.min_height, vim.o.lines - 15)
     local r = math.floor((vim.o.lines - h) / 2 - 1)
     local c = math.floor((vim.o.columns - w) / 2 - 1)
@@ -152,12 +177,12 @@ local function get_dims()
 end
 
 local function resize()
-    if not win or not vim.api.nvim_win_is_valid(win) then
+    if not UiStatus.win or not vim.api.nvim_win_is_valid(UiStatus.win) then
         return
     end
 
     local w, h, r, c = get_dims()
-    vim.api.nvim_win_set_config(win, {
+    vim.api.nvim_win_set_config(UiStatus.win, {
         relative = "editor",
         width = w,
         height = h,
@@ -167,13 +192,13 @@ local function resize()
 end
 
 function M.open()
-    langs = config.languages
+    UiStatus.langs = config.languages
     filter_idx = 1
     frame_idx = 1
 
-    if not buf or not vim.api.nvim_buf_is_valid(buf) then
-        buf = vim.api.nvim_create_buf(false, true)
-        local opts = { buf = buf, noremap = true, silent = true }
+    if not UiStatus.buf or not vim.api.nvim_buf_is_valid(UiStatus.buf) then
+        UiStatus.buf = vim.api.nvim_create_buf(false, true)
+        local opts = { buf = UiStatus.buf, noremap = true, silent = true }
         vim.keymap.set("n", "q", close, opts)
         vim.keymap.set("n", "<Esc>", close, opts)
         vim.keymap.set("n", "r", M.open, opts)
@@ -190,9 +215,9 @@ function M.open()
 
     M.render()
 
-    if not win or not vim.api.nvim_win_is_valid(win) then
+    if not UiStatus.win or not vim.api.nvim_win_is_valid(UiStatus.win) then
         local w, h, r, c = get_dims()
-        win = vim.api.nvim_open_win(buf, true, {
+        UiStatus.win = vim.api.nvim_open_win(UiStatus.buf, true, {
             relative = "editor",
             width = w,
             height = h,
@@ -207,11 +232,11 @@ function M.open()
         })
     end
 
-    if not spinner then
-        spinner = vim.uv.new_timer()
+    if not UiStatus.spinner then
+        UiStatus.spinner = vim.uv.new_timer()
     end
 
-    spinner:start(
+    UiStatus.spinner:start(
         0,
         80,
         vim.schedule_wrap(function()

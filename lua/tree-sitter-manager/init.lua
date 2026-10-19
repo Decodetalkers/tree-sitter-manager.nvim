@@ -62,6 +62,9 @@ function M.setup(opts)
             group = group,
             callback = function(a)
                 local lang = vim.treesitter.language.get_lang(a.match)
+                if not lang then
+                    return
+                end
                 if vim.list_contains(state.cfg.noauto_install, lang) then
                 elseif vim.list_contains(state.languages, lang) then
                     installer.install(lang)

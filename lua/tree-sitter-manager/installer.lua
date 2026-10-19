@@ -11,7 +11,7 @@ local notify_icon
 ---@field status     table<Lang, Status>
 ---@field remove  fun(lang:Lang|Lang[], callback:fun(out:Status), update?:boolean) Remove languages and run callback.
 ---@field install fun(lang:Lang|Lang[], callback?:fun(out:Status), update?:boolean) Install languages and run callback on every language.
----@field update  fun(lang:Lang|Lang[], callback:fun(out:Status)) Update languages and run callback on every language.
+---@field update  fun(lang:Lang|Lang[], callback:fun(out:Status), update?:boolean) Update languages and run callback on every language.
 ---
 ---@alias Lang string
 local M = { installing = {}, status = {} }
@@ -20,6 +20,9 @@ function M.setup()
     notify_icon = config.cfg.nerdfont and notify_nerd or vim.fn["repeat"]({ "" }, 7)
 end
 
+---@param lang string
+---@param source? string
+---@return Status
 local function copy_queries(lang, source)
     local qpath = util.qpath(lang)
     local ok, err
@@ -69,18 +72,20 @@ local function build(lang, info, tmpdir, status, callback)
                 cwd = build_path,
                 status = out,
                 queue = queue,
-                callback = function(out)
-                    if out.ok then
-                        out = copy_queries(lang, info.queries and vim.fs.joinpath(build_path, info.queries))
+                callback = function(status)
+                    if status.ok then
+                        status = copy_queries(lang, info.queries and vim.fs.joinpath(build_path, info.queries))
                     end
                     vim.fs.rm(tmpdir, { recursive = true, force = true })
-                    callback(out)
+                    callback(status)
                 end,
             })
         end,
     })
 end
 
+---@param lang string
+---@param callback? fun(out:Status)
 local function install(lang, callback)
     callback = callback or function() end
 
@@ -98,6 +103,11 @@ local function install(lang, callback)
     local major, minor, patch = unpack(vim.iter(version):map(tonumber):totable())
 
     local info = util.get_repo_info(lang)
+
+    if not info then
+        return
+    end
+
     local tmpdir = vim.fn.tempname()
     local git_args = { "git", "--work-tree=" .. tmpdir, "--git-dir=" .. tmpdir .. "/.git" }
 
@@ -123,8 +133,8 @@ local function install(lang, callback)
         local branch = info.branch and "--branch=" .. info.branch
         util.run(util.concat(git_args, { "clone", "--depth=1", info.url, tmpdir, revision or branch }), {
             status = out,
-            callback = function(out)
-                build(lang, info, tmpdir, out, callback)
+            callback = function(status)
+                build(lang, info, tmpdir, status, callback)
             end,
         })
     end

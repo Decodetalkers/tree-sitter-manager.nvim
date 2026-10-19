@@ -1,5 +1,7 @@
 local M = {}
 
+---@param info tree_sitter_manager.InstallInfo
+---@return tree_sitter_manager.InstallInfo
 function M.backport_use_repo_queries(info)
     if info.use_repo_queries then
         info.queries = info.queries or "queries"

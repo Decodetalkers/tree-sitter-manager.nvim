@@ -10,7 +10,7 @@
 ---@field branch? string Git branch to check out after cloning. Ignored if `revision` is set.
 ---@field generate? boolean Run `tree-sitter generate` before building. Defaults to false.
 ---@field queries? string Specifies the queries directory in the cloned repo that will be used.
-
+---@field use_repo_queries? boolean
 ---@type table<string,tree_sitter_manager.LanguageSpec>
 return {
     ada = {
