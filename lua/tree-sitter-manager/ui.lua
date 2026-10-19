@@ -123,8 +123,8 @@ end
 
 local act = vim.defaulttable(function(action)
     return function()
-        local r, c = unpack(vim.api.nvim_win_get_cursor(UiStatus.win))
-        local lang = vim.api.nvim_get_current_line():match("^%s*([%w_]+)")
+        local r, _ = unpack(vim.api.nvim_win_get_cursor(UiStatus.win))
+        local lang = UiStatus.langs[r]
         if lang then
             installer[action](lang, M.render)
             M.render(true)
